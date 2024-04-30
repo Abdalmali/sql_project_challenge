@@ -1,0 +1,137 @@
+task1:
+مناطق تواجد الشركه 
+SELECT distinct market FROM gdb023.dim_customer
+where   customer="Atliq Exclusive"  and   region="apac"; 
+
+
+---------------------------------------------------------------------------------------------------------------
+نسبه زياده المنتجات بين سنه 2020 و 2021 
+task2:
+use gdb023;
+with cc as (
+select fiscal_year , count(distinct product_code) as count_num
+from fact_gross_price
+group by fiscal_year
+)
+select c1.count_num as unique_products_2020 ,c2.count_num as unique_products_2021 ,round((c2.count_num - c1.count_num) / c1.count_num *100,2) as  percentage_chg
+from cc c1
+cross join cc c2
+where c1.fiscal_year ="2020" and c2.fiscal_year="2021"
+
+-----------------------------------------------------------------------------------------------------------------
+عدد المتجات الفريده بناء علا نوعها 
+task3:
+select  segment ,  count(distinct product_code) as product_count
+from dim_product
+group by segment
+order by product_count desc
+----------------------------------------------------------------------------------------------------------------
+اوجد المنتجات التي ازدادت من سنه 2020 الى 2021 بناء علا نوعها 
+task 4:
+with most as (
+SELECT distinct segment,count(distinct f.product_code)as product_count ,f.fiscal_year
+FROM dim_product p
+join fact_gross_price f
+on p.product_code=f.product_code
+#where f.fiscal_year="2020"
+group by segment,f.fiscal_year
+)
+select  m1.segment ,m1.product_count as product_count_2020 ,m2.product_count as product_count_2021 , m2.product_count-m1.product_count as defrent
+from most  m1
+join most m2
+on m1.segment =m2.segment 
+where m1.fiscal_year ="2020" and m2.fiscal_year="2021" 
+
+----------------------------------------------------------------------------------------------------
+ايجاد المنتج صاحب اقل تكلفه انتاج واصاحب اعلى تكلفه انتاج
+task 5:
+task 5:select f.product_code,concat(p.product," (",variant,")") AS product , manufacturing_cost
+from fact_manufacturing_cost f
+join dim_product p
+on f.product_code=p.product_code
+where manufacturing_cost=(select max(manufacturing_cost) from fact_manufacturing_cost ) 
+or manufacturing_cost=(select min(manufacturing_cost) from fact_manufacturing_cost )
+order by manufacturing_cost desc
+
+
+-----------------------------------------------------------------------------------------------------------
+
+task 6:
+
+ايجاد اول خمسه عملاء لهم خصم في الهند في عام 2021
+
+SELECT   c.customer_code,c.customer ,f.pre_invoice_discount_pct
+FROM dim_customer c
+join fact_pre_invoice_deductions f
+on c.customer_code=f.customer_code
+where c.market="india" and f.fiscal_year="2021"
+order by f.pre_invoice_discount_pct desc
+limit 5
+
+
+------------------------------------------------------------------------------------------------------------
+task 7:
+
+تحديد اجمالي مبياعات عميل خلال شهر 
+
+with final as(
+SELECT monthname(f.date) as month , year(f.date) as year,(f.sold_quantity * s.gross_price) as sm ,f.date
+FROM fact_sales_monthly f
+join dim_customer c
+on c.customer_code = f.customer_code 
+join fact_gross_price s
+on s.product_code=f.product_code 
+where  c.customer="Atliq Exclusive"
+)
+select month, year ,concat(round( sum(sm / 1000000) ,2),"M") as Gross_sales_Amount
+from final
+
+group by date
+order by date
+
+
+-------------------------------------------------------------------------------------------------------------------
+task 9 :
+تحديد نوع البيع او طريقه البيع وكم جابت اجمالي مبياعات معا النسبه المبيعات في هذه الطريقه 
+
+with final 
+as(
+select channel , round(sum(f.sold_quantity * p.gross_price) / 1000000,3) as gross_sales_mln
+from dim_customer c
+join fact_sales_monthly f 
+on c.customer_code =f.customer_code
+join fact_gross_price p
+on p.product_code=f.product_code
+where f.fiscal_year="2021"
+group by channel
+order by gross_sales_mln desc )
+select * , round(gross_sales_mln / sum(gross_sales_mln) over() * 100 ,2) as precant
+from final
+
+
+-------------------------------------------------------------------------------------------------------------------
+task 10 :
+
+ايجاد  اكبر كميه تم  بيعها من منتج بناء علا كل قسم
+
+with final 
+as (
+
+select * ,rank() over(partition by division order by total_sold_quantity desc ) as rank_order
+from (
+SELECT  distinct division , f.product_code ,concat( product ,"(",variant,")") as product  ,sum(sold_quantity) over(partition by f.product_code) as total_sold_quantity
+
+FROM dim_product p
+join fact_sales_monthly f
+on f.product_code =p.product_code
+where f.fiscal_year="2021" 
+#group by f.product_code
+)as c
+)
+select * 
+from final
+where rank_order in (1,2,3)
+
+
+
+
